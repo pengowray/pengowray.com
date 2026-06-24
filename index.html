@@ -61,7 +61,7 @@
   }
 
   .scene{
-    position:relative; z-index:3;
+    position:relative; z-index:4;
     width:100%; height:100%;
     display:grid; place-items:center;
     perspective:1100px;
@@ -102,7 +102,7 @@
 
   .location{
     transform:translateZ(-26px);
-    margin-top:clamp(.1rem, .8vw, .6rem);
+    margin-top:clamp(.7rem, 2vw, 1.3rem);   /* air where the dash used to be */
     font-size:clamp(.66rem, 2.1vw, .92rem);
     font-weight:500;
     letter-spacing:.42em;
@@ -110,12 +110,31 @@
     color:var(--muted);
     padding-left:.42em; /* optical balance for tracking */
   }
-  .location::before{
-    content:"";
-    display:block;
-    width:42px; height:1px;
-    margin:0 auto clamp(1.1rem, 3vw, 1.7rem);
-    background:linear-gradient(90deg, transparent, rgba(244,242,236,.45), transparent);
+
+  /* Large, faint symbol sitting behind the name
+     The two marks live on their own 3D layers in a shared perspective, so each one
+     tilts on its own — independently of the other and of the name above. */
+  .symbol{
+    position:fixed; inset:0; z-index:3; pointer-events:none;
+    display:grid; place-items:center;
+    perspective:1400px;
+  }
+  .symbol svg{
+    grid-area:1 / 1;                 /* stack both marks in one centred cell */
+    width:min(88vmin, 820px);
+    height:min(88vmin, 820px);
+    overflow:visible;
+    transform-origin:50% 50%;
+    will-change:transform;
+  }
+  .sym-ring{
+    fill:none; stroke:url(#symGradA);
+    stroke-width:5.6;        /* viewBox units → bold weight that scales with the mark (~13px) */
+  }
+  .sym-glass{
+    fill:none; stroke:url(#symGradB);
+    stroke-width:4.4;
+    stroke-linejoin:round; stroke-linecap:round;
   }
 
   /* Motion is the purpose of this page, so interactive (mouse/drag) motion
@@ -128,6 +147,33 @@
 </head>
 <body>
   <div class="vignette"></div>
+
+  <!-- symbol: circle + hourglass, each on its own tilt layer -->
+  <div class="symbol" aria-hidden="true">
+    <svg id="symRing" viewBox="0 0 100 100">
+      <defs>
+        <!-- userSpaceOnUse + the shared viewBox makes the fade continuous
+             across both marks, so circle and hourglass read as one symbol -->
+        <linearGradient id="symGradA" gradientUnits="userSpaceOnUse" x1="0" y1="8" x2="0" y2="92">
+          <stop offset="0"   stop-color="#ffffff" stop-opacity=".11"/>
+          <stop offset=".6"  stop-color="#d6d4dc" stop-opacity=".085"/>
+          <stop offset="1"   stop-color="#a9a7b4" stop-opacity=".06"/>
+        </linearGradient>
+      </defs>
+      <circle class="sym-ring" cx="50" cy="50" r="42"/>
+    </svg>
+    <svg id="symGlass" viewBox="0 0 100 100">
+      <defs>
+        <linearGradient id="symGradB" gradientUnits="userSpaceOnUse" x1="0" y1="8" x2="0" y2="92">
+          <stop offset="0"   stop-color="#ffffff" stop-opacity=".11"/>
+          <stop offset=".6"  stop-color="#d6d4dc" stop-opacity=".085"/>
+          <stop offset="1"   stop-color="#a9a7b4" stop-opacity=".06"/>
+        </linearGradient>
+      </defs>
+      <path class="sym-glass" d="M21.7 19 L78.3 19 L50 50 Z M21.7 81 L78.3 81 L50 50 Z"/>
+    </svg>
+  </div>
+
   <div class="glow" id="glow"></div>
 
   <main class="scene" id="scene" aria-label="Pengo Wray — Melbourne, Australia">
@@ -144,6 +190,8 @@
     var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     var stage  = document.getElementById("stage");
     var scene  = document.getElementById("scene");
+    var symRing  = document.getElementById("symRing");   // circle layer
+    var symGlass = document.getElementById("symGlass");  // hourglass layer
     if (!stage) return;   // interactive motion runs regardless; only idle drift respects "reduce"
 
     // tuning
@@ -162,6 +210,12 @@
     var dragging = false;
     var lastMove = performance.now();
 
+    // symbol parallax: a normalised pointer that's always live (even mid-drag)
+    // plus a smoothed tilt for each mark so they ease, never snap.
+    var pn    = { x:0, y:0 };    // pointer in -1..1, updated every move
+    var ring  = { x:0, y:0 };    // smoothed circle tilt
+    var glass = { x:0, y:0 };    // smoothed hourglass tilt
+
     function clamp(v, m){ return v < -m ? -m : (v > m ? m : v); }
 
     // pointer position drives the cursor glow + hover aim
@@ -169,6 +223,10 @@
       document.documentElement.style.setProperty("--mx", e.clientX + "px");
       document.documentElement.style.setProperty("--my", e.clientY + "px");
       lastMove = performance.now();
+
+      // feeds the background symbol even while you drag the name
+      pn.x = (e.clientX / innerWidth)  * 2 - 1;
+      pn.y = (e.clientY / innerHeight) * 2 - 1;
 
       if (dragging){
         var dx = e.clientX - last.x;
@@ -221,6 +279,36 @@
       rot.y = clamp(rot.y + vel.y, CLAMP);
 
       stage.style.transform = "rotateX(" + rot.x.toFixed(3) + "deg) rotateY(" + rot.y.toFixed(3) + "deg)";
+
+      // Background symbol. The hourglass reacts harder to the
+      // pointer than the ring, and each gets a slow breath on its own
+      // frequency + phase — so the two marks are perpetually a few degrees
+      // out of step with each other: tilting independently.
+      if (symRing && symGlass){
+        var SYM = 7;                       // base pointer tilt (deg)
+        // The hourglass swings ~2.5x as far as the ring, so they visibly
+        // separate as you move — the requested "tilting independently".
+        var rtx = -pn.y * SYM * 0.45;
+        var rty =  pn.x * SYM * 0.45;
+        var gtx = -pn.y * SYM * 1.15;
+        var gty =  pn.x * SYM * 1.15;
+        // drift along with the name's drag/fling, but far less than it moves
+        rtx += rot.x * 0.20;  rty += rot.y * 0.20;
+        gtx += rot.x * 0.26;  gty += rot.y * 0.26;
+        if (!reduce){                      // idle breath; off when motion is reduced
+          rtx += Math.sin(t * 0.00024) * 1.3;
+          rty += Math.cos(t * 0.00031) * 1.3;
+          gtx += Math.sin(t * 0.00043 + 1.9) * 2.6;
+          gty += Math.cos(t * 0.00037 + 0.7) * 2.6;
+        }
+        ring.x  += (rtx - ring.x)  * 0.045;
+        ring.y  += (rty - ring.y)  * 0.045;
+        glass.x += (gtx - glass.x) * 0.060;
+        glass.y += (gty - glass.y) * 0.060;
+        symRing.style.transform  = "rotateX(" + ring.x.toFixed(3)  + "deg) rotateY(" + ring.y.toFixed(3)  + "deg)";
+        symGlass.style.transform = "rotateX(" + glass.x.toFixed(3) + "deg) rotateY(" + glass.y.toFixed(3) + "deg)";
+      }
+
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
