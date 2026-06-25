@@ -20,8 +20,6 @@
     --bg-1:#101015;
     --ink:#f4f2ec;
     --muted:#9a98a4;
-    --mx:50vw;
-    --my:42vh;
   }
 
   *{ box-sizing:border-box; margin:0; padding:0; }
@@ -48,18 +46,6 @@
     background:radial-gradient(140vmax 100vmax at 50% 50%, transparent 55%, rgba(0,0,0,.55) 100%);
   }
 
-  /* soft light that trails the cursor */
-  .glow{
-    position:fixed; top:0; left:0; z-index:2; pointer-events:none;
-    width:40vmax; height:40vmax; border-radius:50%;
-    transform:translate3d(calc(var(--mx) - 50%), calc(var(--my) - 50%), 0);
-    background:radial-gradient(closest-side, rgba(255,236,205,.07), rgba(255,236,205,.022) 45%, transparent 70%);
-    mix-blend-mode:screen;
-    filter:blur(18px);
-    transition:transform .18s cubic-bezier(.22,.61,.36,1), opacity .4s;
-    will-change:transform;
-  }
-
   .scene{
     position:relative; z-index:4;
     width:100%; height:100%;
@@ -84,7 +70,10 @@
      a filter and/or a 3D transform. Keeping .name "plain" avoids that. */
   .name-layer{
     transform:translateZ(55px);
-    filter:drop-shadow(0 20px 46px rgba(0,0,0,.5));
+    /* Tighter than it looks like it should be: the letters ripple *inside* this
+       filter, so a wide blur made Chrome re-blur the whole word every frame
+       mid-drag. A small radius keeps the depth cue but stays cheap to recompute. */
+    filter:drop-shadow(0 10px 18px rgba(0,0,0,.55));
   }
   .name{
     font-family:"Fraunces", Georgia, "Times New Roman", serif;
@@ -92,8 +81,17 @@
     font-size:clamp(3rem, 13vw, 9.5rem);
     line-height:1.12;                 /* room for descenders inside the clip box */
     letter-spacing:-0.015em;
-    padding:.06em .08em .24em;        /* keeps g/y tails within the gradient fill */
+    padding:.06em .08em 0;            /* descender room now lives on .ink */
     color:#ece9f2;                    /* visible fallback if clip-text unsupported */
+  }
+  /* Each glyph is its own element so it can spring independently. The transform
+     rides on .ltr and the clip-text gradient on the inner .ink, so no single
+     element mixes background-clip:text with a transform (the Firefox-breaking
+     combo noted above). */
+  .ltr{ display:inline-block; }
+  .ink{
+    display:inline-block;
+    padding-bottom:.26em;             /* gives the gradient room to fill g/y tails */
     background:linear-gradient(176deg, #ffffff 0%, #d6d4dc 58%, #a9a7b4 100%);
     -webkit-background-clip:text; background-clip:text;
     -webkit-text-fill-color:transparent;   /* Firefox-safe gradient text */
@@ -118,31 +116,36 @@
     position:fixed; inset:0; z-index:3; pointer-events:none;
     display:grid; place-items:center;
     perspective:1400px;
+    /* Strokes are drawn fully opaque; the whole mark is faded here as one layer,
+       so where the ring and hourglass cross the colour stays uniform instead of
+       the two strokes' transparencies doubling up. */
+    opacity:.09;
   }
   .symbol svg{
     grid-area:1 / 1;                 /* stack both marks in one centred cell */
-    width:min(88vmin, 820px);
-    height:min(88vmin, 820px);
+    width:min(234vmin, 900px);
+    height:min(234vmin, 900px);
     overflow:visible;
     transform-origin:50% 50%;
     will-change:transform;
   }
+  /* One flat colour. The whole mark is at .09 opacity (see .symbol), so the old
+     white→grey gradient was imperceptible — a solid stroke rasterises far cheaper
+     each time the mark tilts. */
   .sym-ring{
-    fill:none; stroke:url(#symGradA);
+    fill:none; stroke:#cfcdd6;
     stroke-width:5.6;        /* viewBox units → bold weight that scales with the mark (~13px) */
   }
   .sym-glass{
-    fill:none; stroke:url(#symGradB);
+    fill:none; stroke:#cfcdd6;
     stroke-width:4.4;
     stroke-linejoin:round; stroke-linecap:round;
   }
 
-  /* Motion is the purpose of this page, so interactive (mouse/drag) motion
-     stays on even with reduced-motion; only the automatic idle drift and the
-     glow's trailing animation are suppressed below (see script + this rule). */
-  @media (prefers-reduced-motion: reduce){
-    .glow{ transition:none; }
-  }
+  /* Motion here is purely interactive — hover, drag/fling, device tilt. There is
+     no automatic idle animation; the rAF loop parks itself the instant everything
+     settles, so a page just sitting there costs nothing (which is why it no longer
+     drifts/"breathes" on its own). */
 </style>
 </head>
 <body>
@@ -151,34 +154,16 @@
   <!-- symbol: circle + hourglass, each on its own tilt layer -->
   <div class="symbol" aria-hidden="true">
     <svg id="symRing" viewBox="0 0 100 100">
-      <defs>
-        <!-- userSpaceOnUse + the shared viewBox makes the fade continuous
-             across both marks, so circle and hourglass read as one symbol -->
-        <linearGradient id="symGradA" gradientUnits="userSpaceOnUse" x1="0" y1="8" x2="0" y2="92">
-          <stop offset="0"   stop-color="#ffffff" stop-opacity=".11"/>
-          <stop offset=".6"  stop-color="#d6d4dc" stop-opacity=".085"/>
-          <stop offset="1"   stop-color="#a9a7b4" stop-opacity=".06"/>
-        </linearGradient>
-      </defs>
       <circle class="sym-ring" cx="50" cy="50" r="42"/>
     </svg>
     <svg id="symGlass" viewBox="0 0 100 100">
-      <defs>
-        <linearGradient id="symGradB" gradientUnits="userSpaceOnUse" x1="0" y1="8" x2="0" y2="92">
-          <stop offset="0"   stop-color="#ffffff" stop-opacity=".11"/>
-          <stop offset=".6"  stop-color="#d6d4dc" stop-opacity=".085"/>
-          <stop offset="1"   stop-color="#a9a7b4" stop-opacity=".06"/>
-        </linearGradient>
-      </defs>
       <path class="sym-glass" d="M21.7 19 L78.3 19 L50 50 Z M21.7 81 L78.3 81 L50 50 Z"/>
     </svg>
   </div>
 
-  <div class="glow" id="glow"></div>
-
   <main class="scene" id="scene" aria-label="Pengo Wray — Melbourne, Australia">
     <div class="stage" id="stage">
-      <div class="name-layer"><h1 class="name">Pengo&nbsp;Wray</h1></div>
+      <div class="name-layer"><h1 class="name"><span class="ltr"><span class="ink">P</span></span><span class="ltr"><span class="ink">e</span></span><span class="ltr"><span class="ink">n</span></span><span class="ltr"><span class="ink">g</span></span><span class="ltr"><span class="ink">o</span></span><span class="ltr"><span class="ink">&nbsp;</span></span><span class="ltr"><span class="ink">W</span></span><span class="ltr"><span class="ink">r</span></span><span class="ltr"><span class="ink">a</span></span><span class="ltr"><span class="ink">y</span></span></h1></div>
       <p class="location">Melbourne, Australia</p>
     </div>
   </main>
@@ -187,42 +172,80 @@
   (function(){
     "use strict";
 
-    var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     var stage  = document.getElementById("stage");
     var scene  = document.getElementById("scene");
     var symRing  = document.getElementById("symRing");   // circle layer
     var symGlass = document.getElementById("symGlass");  // hourglass layer
-    if (!stage) return;   // interactive motion runs regardless; only idle drift respects "reduce"
+    if (!stage) return;
 
-    // tuning
+    // tuning (all in "per fixed 60Hz step" units — see the loop below)
     var MAX_TILT   = 7.5;    // degrees of hover tilt at screen edge
     var DRAG_SENS  = 0.17;   // degrees per pixel dragged
     var STIFF      = 0.060;  // spring stiffness toward target
     var DAMP       = 0.80;   // velocity damping (inertia after a fling)
     var CLAMP      = 55;     // max rotation in any direction
-    var IDLE_DELAY = 2600;   // ms of stillness before gentle idle drift
-    var IDLE_AMP   = 1.6;    // degrees of idle drift
+    var REST       = 0.02;   // below this (deg & deg/step) the name is "at rest"
 
     var rot   = { x:0, y:0 };   // current rotation
     var vel   = { x:0, y:0 };   // angular velocity
     var aim   = { x:0, y:0 };   // hover target rotation
     var last  = { x:0, y:0 };   // last pointer pos while dragging
     var dragging = false;
-    var lastMove = performance.now();
+    var running  = false;       // is the rAF loop currently scheduled?
 
     // symbol parallax: a normalised pointer that's always live (even mid-drag)
     // plus a smoothed tilt for each mark so they ease, never snap.
     var pn    = { x:0, y:0 };    // pointer in -1..1, updated every move
     var ring  = { x:0, y:0 };    // smoothed circle tilt
     var glass = { x:0, y:0 };    // smoothed hourglass tilt
+    var symW  = { rx:1, ry:1, gx:1, gy:1 };  // last tilt written to the DOM, so the
+                                             // symbol stops compositing once at rest
+    var rotW  = { x:9, y:9 };    // last name rotation written — gates the costly
+                                 // re-composite of the filtered, gradient-text name
+    var rtx=0, rty=0, gtx=0, gty=0;          // last symbol tilt targets (render + parking)
+
+    // previous-step snapshots so each drawn frame can interpolate between the last
+    // two 60Hz steps — this restores native-refresh smoothness (120/144Hz) on top
+    // of the fixed-speed simulation, instead of showing only 60 stepped updates.
+    var rotP   = { x:0, y:0 };
+    var ringP  = { x:0, y:0 };
+    var glassP = { x:0, y:0 };
+    var lpxP=[], lpyP=[];
+
+    // Physics runs at a FIXED 60 steps/second via a time accumulator, so the motion
+    // plays at the same wall-clock speed on any display. A 120/144Hz panel (which
+    // Firefox tends to drive) no longer runs it ~2x too fast; rendering still
+    // happens at the native refresh, only the simulation cadence is pinned.
+    var FIXED = 1000 / 60;
+    var prev  = -1;             // previous frame timestamp; -1 = "(re)starting, resync"
+    var acc   = 0;              // unspent time carried into the next frame
+
+    // per-letter spring: each glyph trails the word's motion and eases back to
+    // rest at its own rate, so a fling makes "Pengo Wray" ripple unevenly.
+    var letters = stage.querySelectorAll(".ltr");
+    var L = letters.length;
+    var lpx=[], lpy=[], lvx=[], lvy=[], lk=[], ld=[], lw=[], ldirty=[];
+    for (var li=0; li<L; li++){
+      lpx[li]=lpy[li]=lvx[li]=lvy[li]=0; lpxP[li]=lpyP[li]=0; ldirty[li]=false;
+      lk[li] = 0.085 + ((li*37)%5) * 0.022;  // return stiffness — spread per glyph
+      ld[li] = 0.74  + ((li*53)%4) * 0.02;   // damping
+      lw[li] = 0.85  + ((li*29)%4) * 0.12;   // throw distance
+    }
 
     function clamp(v, m){ return v < -m ? -m : (v > m ? m : v); }
+    // deadzone: drop the tiny residual velocities so the letters sit perfectly
+    // still until the word is actually moved
+    function dz(v){ return v > 0.12 ? v - 0.12 : (v < -0.12 ? v + 0.12 : 0); }
+    // |a - b| > e — used to decide when motion is still perceptible
+    function far(a, b, e){ return a - b > e || b - a > e; }
 
-    // pointer position drives the cursor glow + hover aim
+    // The loop runs only while something is actually moving. Any input "kicks" it
+    // back to life; tick() parks it again once the whole scene settles.
+    function kick(){ if (!running){ running = true; requestAnimationFrame(tick); } }
+
+    // pointer position drives the hover aim + the symbol/letter motion
     window.addEventListener("pointermove", function(e){
-      document.documentElement.style.setProperty("--mx", e.clientX + "px");
-      document.documentElement.style.setProperty("--my", e.clientY + "px");
-      lastMove = performance.now();
+      kick();
 
       // feeds the background symbol even while you drag the name
       pn.x = (e.clientX / innerWidth)  * 2 - 1;
@@ -247,7 +270,7 @@
     scene.addEventListener("pointerdown", function(e){
       dragging = true;
       last.x = e.clientX; last.y = e.clientY;
-      lastMove = performance.now();
+      kick();
       try { scene.setPointerCapture(e.pointerId); } catch(_){}
     });
 
@@ -260,57 +283,114 @@
       if (dragging || e.gamma == null || e.beta == null) return;
       aim.y = clamp(e.gamma, MAX_TILT) / MAX_TILT * MAX_TILT;
       aim.x = clamp(e.beta - 45, MAX_TILT);
-      lastMove = performance.now();
+      kick();
     }, true);
 
-    function tick(t){
+    // One fixed physics step (1/60 s). Identical maths to before — just invoked a
+    // fixed number of times per wall-clock second instead of once per drawn frame.
+    function step(){
+      // snapshot the state this step starts from, so the next render can lerp from it
+      rotP.x = rot.x; rotP.y = rot.y;
+      ringP.x = ring.x; ringP.y = ring.y;
+      glassP.x = glass.x; glassP.y = glass.y;
+      for (var p=0; p<L; p++){ lpxP[p]=lpx[p]; lpyP[p]=lpy[p]; }
+
       if (!dragging){
-        var tx = aim.x, ty = aim.y;
-        // come alive after a moment of stillness (skipped when the OS asks to reduce motion)
-        if (!reduce && t - lastMove > IDLE_DELAY){
-          tx += Math.sin(t * 0.00042) * IDLE_AMP;
-          ty += Math.cos(t * 0.00055) * IDLE_AMP;
-        }
-        vel.x += (tx - rot.x) * STIFF;
-        vel.y += (ty - rot.y) * STIFF;
+        vel.x += (aim.x - rot.x) * STIFF;
+        vel.y += (aim.y - rot.y) * STIFF;
       }
       vel.x *= DAMP; vel.y *= DAMP;
       rot.x = clamp(rot.x + vel.x, CLAMP);
       rot.y = clamp(rot.y + vel.y, CLAMP);
 
-      stage.style.transform = "rotateX(" + rot.x.toFixed(3) + "deg) rotateY(" + rot.y.toFixed(3) + "deg)";
+      // Background symbol target: pointer tilt + a little of the name's drift. The
+      // hourglass reacts ~2.5x harder than the ring and eases faster, so the two
+      // marks sit a few degrees out of step — tilting independently, as intended.
+      var SYM = 7;
+      rtx = -pn.y * SYM * 0.45 + rot.x * 0.20;
+      rty =  pn.x * SYM * 0.45 + rot.y * 0.20;
+      gtx = -pn.y * SYM * 1.15 + rot.x * 0.26;
+      gty =  pn.x * SYM * 1.15 + rot.y * 0.26;
+      ring.x  += (rtx - ring.x)  * 0.045;
+      ring.y  += (rty - ring.y)  * 0.045;
+      glass.x += (gtx - glass.x) * 0.060;
+      glass.y += (gty - glass.y) * 0.060;
 
-      // Background symbol. The hourglass reacts harder to the
-      // pointer than the ring, and each gets a slow breath on its own
-      // frequency + phase — so the two marks are perpetually a few degrees
-      // out of step with each other: tilting independently.
+      // per-letter ripple — driven by the same velocity that flings the word,
+      // deadzoned so a resting page never disturbs the letters
+      var kx = dz(vel.x), ky = dz(vel.y);
+      for (var i=0; i<L; i++){
+        var tgx = clamp(ky * 1.0 * lw[i], 16);
+        var tgy = clamp(kx * 1.4 * lw[i], 16);
+        lvx[i] += (tgx - lpx[i]) * lk[i]; lvx[i] *= ld[i]; lpx[i] += lvx[i];
+        lvy[i] += (tgy - lpy[i]) * lk[i]; lvy[i] *= ld[i]; lpy[i] += lvy[i];
+      }
+    }
+
+    function tick(t){
+      // Advance the simulation by however much real time has elapsed, in fixed
+      // 60Hz steps. On a (re)start, run exactly one step rather than jumping.
+      var dt;
+      if (prev < 0){ dt = FIXED; }
+      else { dt = t - prev; if (dt > 100) dt = 100; }   // clamp: don't fast-forward after a stall
+      prev = t;
+      acc += dt;
+      var n = 0;
+      while (acc >= FIXED && n < 6){ step(); acc -= FIXED; n++; }
+      if (acc >= FIXED) acc = 0;   // still behind after the cap → drop the backlog
+
+      // ---- render: lerp between the last two steps (alpha = unspent time / step) so
+      // the display's native refresh stays smooth. A held drag renders 1:1 (alpha 1)
+      // to stay perfectly responsive; only spring/ease/fling motion is interpolated.
+      // Every write is still gated, so an unchanged frame costs nothing.
+      var a = dragging ? 1 : acc / FIXED;
+      var b = 1 - a;
+
+      var rx = rotP.x*b + rot.x*a, ry = rotP.y*b + rot.y*a;
+      if (far(rx, rotW.x, 0.003) || far(ry, rotW.y, 0.003)){
+        stage.style.transform = "rotateX(" + rx.toFixed(3) + "deg) rotateY(" + ry.toFixed(3) + "deg)";
+        rotW.x = rx; rotW.y = ry;
+      }
       if (symRing && symGlass){
-        var SYM = 7;                       // base pointer tilt (deg)
-        // The hourglass swings ~2.5x as far as the ring, so they visibly
-        // separate as you move — the requested "tilting independently".
-        var rtx = -pn.y * SYM * 0.45;
-        var rty =  pn.x * SYM * 0.45;
-        var gtx = -pn.y * SYM * 1.15;
-        var gty =  pn.x * SYM * 1.15;
-        // drift along with the name's drag/fling, but far less than it moves
-        rtx += rot.x * 0.20;  rty += rot.y * 0.20;
-        gtx += rot.x * 0.26;  gty += rot.y * 0.26;
-        if (!reduce){                      // idle breath; off when motion is reduced
-          rtx += Math.sin(t * 0.00024) * 1.3;
-          rty += Math.cos(t * 0.00031) * 1.3;
-          gtx += Math.sin(t * 0.00043 + 1.9) * 2.6;
-          gty += Math.cos(t * 0.00037 + 0.7) * 2.6;
+        var rcx = ringP.x*b + ring.x*a,  rcy = ringP.y*b + ring.y*a;
+        var gcx = glassP.x*b + glass.x*a, gcy = glassP.y*b + glass.y*a;
+        if (far(rcx, symW.rx, 0.002) || far(rcy, symW.ry, 0.002)){
+          symRing.style.transform = "rotateX(" + rcx.toFixed(3) + "deg) rotateY(" + rcy.toFixed(3) + "deg)";
+          symW.rx = rcx; symW.ry = rcy;
         }
-        ring.x  += (rtx - ring.x)  * 0.045;
-        ring.y  += (rty - ring.y)  * 0.045;
-        glass.x += (gtx - glass.x) * 0.060;
-        glass.y += (gty - glass.y) * 0.060;
-        symRing.style.transform  = "rotateX(" + ring.x.toFixed(3)  + "deg) rotateY(" + ring.y.toFixed(3)  + "deg)";
-        symGlass.style.transform = "rotateX(" + glass.x.toFixed(3) + "deg) rotateY(" + glass.y.toFixed(3) + "deg)";
+        if (far(gcx, symW.gx, 0.002) || far(gcy, symW.gy, 0.002)){
+          symGlass.style.transform = "rotateX(" + gcx.toFixed(3) + "deg) rotateY(" + gcy.toFixed(3) + "deg)";
+          symW.gx = gcx; symW.gy = gcy;
+        }
+      }
+      var lettersMoving = false;
+      for (var i=0; i<L; i++){
+        if (lpx[i] > 0.03 || lpx[i] < -0.03 || lpy[i] > 0.03 || lpy[i] < -0.03 ||
+            lvx[i] > 0.03 || lvx[i] < -0.03 || lvy[i] > 0.03 || lvy[i] < -0.03){
+          var lx = lpxP[i]*b + lpx[i]*a, ly = lpyP[i]*b + lpy[i]*a;
+          letters[i].style.transform =
+            "translate(" + lx.toFixed(2) + "px," + ly.toFixed(2) +
+            "px) rotate(" + (lx * 0.12).toFixed(2) + "deg)";
+          ldirty[i] = true; lettersMoving = true;
+        } else if (ldirty[i]){
+          letters[i].style.transform = ""; ldirty[i] = false;
+        }
       }
 
-      requestAnimationFrame(tick);
+      // ---- keep running only while something is still in motion ----
+      var alive = dragging
+        || far(vel.x, 0, REST) || far(vel.y, 0, REST)
+        || far(rot.x, aim.x, REST) || far(rot.y, aim.y, REST)
+        || far(rtx, ring.x, 0.01) || far(rty, ring.y, 0.01)
+        || far(gtx, glass.x, 0.01) || far(gty, glass.y, 0.01)
+        || lettersMoving;
+
+      if (alive) requestAnimationFrame(tick);
+      else { running = false; prev = -1; acc = 0; }   // park; resync timing on restart
     }
+
+    // one frame to write the resting transform, then it parks until first input
+    running = true;
     requestAnimationFrame(tick);
   })();
   </script>
