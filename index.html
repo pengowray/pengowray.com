@@ -123,8 +123,8 @@
   }
   .symbol svg{
     grid-area:1 / 1;                 /* stack both marks in one centred cell */
-    width:min(234vmin, 900px);
-    height:min(234vmin, 900px);
+    width:min(234vmin, 1200px);
+    height:min(234vmin, 1200px);
     overflow:visible;
     transform-origin:50% 50%;
     will-change:transform;
@@ -179,11 +179,11 @@
     if (!stage) return;
 
     // tuning (all in "per fixed 60Hz step" units — see the loop below)
-    var MAX_TILT   = 7.5;    // degrees of hover tilt at screen edge
+    var MAX_TILT   = 10.5;   // degrees of hover tilt at screen edge
     var DRAG_SENS  = 0.17;   // degrees per pixel dragged
     var STIFF      = 0.060;  // spring stiffness toward target
     var DAMP       = 0.80;   // velocity damping (inertia after a fling)
-    var CLAMP      = 55;     // max rotation in any direction
+    var CLAMP      = 33;     // max rotation in any direction
     var REST       = 0.02;   // below this (deg & deg/step) the name is "at rest"
 
     var rot   = { x:0, y:0 };   // current rotation
@@ -200,9 +200,9 @@
     var glass = { x:0, y:0 };    // smoothed hourglass tilt
     var symW  = { rx:1, ry:1, gx:1, gy:1 };  // last tilt written to the DOM, so the
                                              // symbol stops compositing once at rest
-    var rotW  = { x:9, y:9 };    // last name rotation written — gates the costly
-                                 // re-composite of the filtered, gradient-text name
-    var rtx=0, rty=0, gtx=0, gty=0;          // last symbol tilt targets (render + parking)
+    var rotW  = { x:2.5, y:2.5 };    // last name rotation written — gates the costly
+                                     // re-composite of the filtered, gradient-text name
+    var rtx=0, rty=0, gtx=0, gty=0;  // last symbol tilt targets (render + parking)
 
     // previous-step snapshots so each drawn frame can interpolate between the last
     // two 60Hz steps — this restores native-refresh smoothness (120/144Hz) on top
