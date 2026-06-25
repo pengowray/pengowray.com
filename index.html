@@ -123,8 +123,12 @@
   }
   .symbol svg{
     grid-area:1 / 1;                 /* stack both marks in one centred cell */
-    width:min(234vmin, 1200px);
-    height:min(234vmin, 1200px);
+    /* Sized off viewport HEIGHT, not vmin, so the same slice of the mark stays
+       visible at any aspect ratio. The ring is 84% of this box, so 150vh makes the
+       ring ~126vh — bigger than the viewport, so its top and bottom crop off on
+       almost any screen. Sides crop too on narrow/portrait — all intentional. */
+    width:150vh;
+    height:150vh;
     overflow:visible;
     transform-origin:50% 50%;
     will-change:transform;
@@ -184,7 +188,7 @@
     var STIFF      = 0.060;  // spring stiffness toward target
     var DAMP       = 0.80;   // velocity damping (inertia after a fling)
     var CLAMP      = 33;     // max rotation in any direction
-    var REST       = 0.02;   // below this (deg & deg/step) the name is "at rest"
+    var REST       = 0.04;   // below this (deg & deg/step) the name is "at rest"
 
     var rot   = { x:0, y:0 };   // current rotation
     var vel   = { x:0, y:0 };   // angular velocity
@@ -322,8 +326,13 @@
       for (var i=0; i<L; i++){
         var tgx = clamp(ky * 1.0 * lw[i], 16);
         var tgy = clamp(kx * 1.4 * lw[i], 16);
-        lvx[i] += (tgx - lpx[i]) * lk[i]; lvx[i] *= ld[i]; lpx[i] += lvx[i];
-        lvy[i] += (tgy - lpy[i]) * lk[i]; lvy[i] *= ld[i]; lpy[i] += lvy[i];
+        // Adaptive damping: the big initial throw rides the normal spring, but once
+        // a glyph slows to a couple px/step (the tail of the ripple) it's damped
+        // hard so the jiggle dies almost immediately instead of shimmering on.
+        var dxn = lvx[i] < 1.6 && lvx[i] > -1.6 ? 0.42 : ld[i];
+        var dyn = lvy[i] < 1.6 && lvy[i] > -1.6 ? 0.42 : ld[i];
+        lvx[i] += (tgx - lpx[i]) * lk[i]; lvx[i] *= dxn; lpx[i] += lvx[i];
+        lvy[i] += (tgy - lpy[i]) * lk[i]; lvy[i] *= dyn; lpy[i] += lvy[i];
       }
     }
 
@@ -365,8 +374,8 @@
       }
       var lettersMoving = false;
       for (var i=0; i<L; i++){
-        if (lpx[i] > 0.03 || lpx[i] < -0.03 || lpy[i] > 0.03 || lpy[i] < -0.03 ||
-            lvx[i] > 0.03 || lvx[i] < -0.03 || lvy[i] > 0.03 || lvy[i] < -0.03){
+        if (lpx[i] > 0.12 || lpx[i] < -0.12 || lpy[i] > 0.12 || lpy[i] < -0.12 ||
+            lvx[i] > 0.12 || lvx[i] < -0.12 || lvy[i] > 0.12 || lvy[i] < -0.12){
           var lx = lpxP[i]*b + lpx[i]*a, ly = lpyP[i]*b + lpy[i]*a;
           letters[i].style.transform =
             "translate(" + lx.toFixed(2) + "px," + ly.toFixed(2) +
